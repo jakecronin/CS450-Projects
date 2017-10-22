@@ -63,8 +63,8 @@ void appendFiles(int argc, char *argv[]){
 		printf("need to create archive file\n");
 		int archDesc = open(archiveName, O_CREAT | O_RDWR | O_TRUNC, 0666);
 
+		int bytes = 8;	//aggregate number of bytes to write to file
 		//Calculate total write size
-		int bytes = 8;	//begins with 8 bytes for archive header
 		for (int i = 3; i < argc; i++){	//for each file, got contents size
 			char* fileName = argv[i];
 			struct stat fileStats;
@@ -75,9 +75,11 @@ void appendFiles(int argc, char *argv[]){
 			}
 			bytes = bytes + 60;	//add 60 bytes for file header
 			bytes = bytes + fileStats.st_size;	//add file size
+			bytes = bytes + 1; //new line character at end
 		}
 		printf("Total write array size is %d\n", bytes);
 		
+
 		//build write char array (to be written to file)
 		char toWrite[bytes + 1];	//one extra space for null termination character
 		for (int i = 0; i < bytes + 1; ++i){
@@ -88,7 +90,8 @@ void appendFiles(int argc, char *argv[]){
 			toWrite[i] = archHeader[i];
 		}
 		toWrite[8] = '\0';
-		printf("ToWrite after putting in header: %s\n", toWrite);
+
+		//Add header + body for each file
 		for (int i = 3; i < argc; i++){
 			char* fileName = argv[i];
 			struct stat fileStats;
@@ -97,7 +100,6 @@ void appendFiles(int argc, char *argv[]){
 				printf("Invalid not found: %s\n", fileName);
 				continue;
 			}
-
 			//First Build file header, then put it on the toWrite string
 			int headerSize = 61; //60 chars + null char
 			char header[headerSize];
@@ -110,7 +112,6 @@ void appendFiles(int argc, char *argv[]){
 				header[i] = ' ';
 			}
 			header[16] = '\0';			
-			printf("name %s\n",header);
 
 			char timestamp[13];
 			int n = sprintf(timestamp, "%ld", fileStats.st_mtime);
@@ -137,38 +138,47 @@ void appendFiles(int argc, char *argv[]){
 			addWhitespace(fileSize, 11);
 			strcat(header, fileSize);
 
-			char end[3];
-			end[0] = '\x60';
-			end[1] = '\x0A';
-			strcat(header, end);
-
+			header[58] = '\x60';
+			header[59] = '\x0A';
 			header[60] = '\0';
-
-			
-
-			printf("ultimate header: %s", header);
-			printf("header size: %lu\n", strlen(header));
-			printf("finished writing header\n");
 
 			//Add header to write contents
 			strcat(toWrite, header);
-			printf("added header to write string\n");
+			printf("toWrite after adding file: %s\n", toWrite);
 
 			//Second get file contents
 			char fileContents[fileStats.st_size];
 			int fileDesc = open(fileName, O_RDONLY);
 			n = read(fileDesc, fileContents, fileStats.st_size);
-			printf("got file contents: %s\n", fileContents);
 			strcat(toWrite, fileContents);	//add file contents onto header
+			strcat(toWrite, "\n");
 			close(fileDesc);
-
 		}
 		toWrite[bytes] = '\0';	//make sure it is null terminated
+
 		printf("about to write: %s\n", toWrite);
 		int written = write(archDesc, toWrite, bytes);
 		printf("successfully wrote %d bytes\n",written);
 		close(archDesc);
 	}else{
+//MARK: Writing to archive if archive exists
+		int bytes = 8;	//aggregate number of bytes to write to file
+		//Calculate total write size
+		for (int i = 3; i < argc; i++){	//for each file, got contents size
+			char* fileName = argv[i];
+			struct stat fileStats;
+			int exists = stat(fileName, &fileStats);
+			if (exists == -1){
+				printf("Invalid not found: %s\n", fileName);
+				continue;
+			}
+			bytes = bytes + 60;	//add 60 bytes for file header
+			bytes = bytes + fileStats.st_size;	//add file size
+			bytes = bytes + 1; //new line character at end
+		}
+
+
+
 		printf("archive file already exists\n");
 	}
 	//if archive exits, append, otherwise, create
