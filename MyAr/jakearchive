@@ -1,27 +1,11 @@
 !<arch>
-test.txt        1508626782  501   20    100644  21        `
-hello. this is a test
-test2.txt       1508630518  501   20    100644  99        `
-This is
-A second
-test.
-
-This file is so cool. It just keeps on going...
-
-and going...
-
-and going...
-test.txt        1508626782  501   20    100644  21        `
-hello. this is a test
-test2.txt       1508630518  501   20    100644  99        `
-This is
-A second
-test.
-
-This file is so cool. It just keeps on going...
-
-and going...
-
-and going...
-test.txt        1508626782  501   20    100644  21        `
-hello. this is a test
+testeven.txt    1508701695  501   20    100644  5         `
+12345
+testodd.txt     1508701695  501   20    100644  4         `
+1234testeven.txt    1508701728  501   20    100644  10        `
+12345
+eventestodd.txt     1508701726  501   20    100644  8         `
+1234
+oddtesteven.txt    1508701753  501   20    100644  10        `
+12345
+even

@@ -1,7 +1,19 @@
 !<arch>
+testodd.txt     1508700633  501   20    100644  4         `
+1234testeven.txt    1508700177  501   20    100644  5         `
+12345
+testodd.txt     1508700633  501   20    100644  4         `
+1234testeven.txt    1508700177  501   20    100644  5         `
+12345
+testodd.txt     1508700633  501   20    100644  4         `
+1234testeven.txt    1508700177  501   20    100644  5         `
+12345
+testodd.txt     1508700633  501   20    100644  4         `
+1234testeven.txt    1508700177  501   20    100644  5         `
+12345
 test.txt        1508626782  501   20    100644  21        `
-hello. this is a test
-test2.txt       1508630518  501   20    100644  99        `
+hello. this is a test
+test2.txt       1508698686  501   20    100644  105       `
 This is
 A second
 test.
@@ -11,3 +23,4 @@ This file is so cool. It just keeps on going...
 and going...
 
 and going...
+gone.
