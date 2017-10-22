@@ -56,7 +56,6 @@ void appendFiles(int argc, char *argv[]){
 		printf("Not enough arguments to append files\n%s", useage);
 	}
 	char* archiveName = argv[2];
-	
 	struct stat archStats;
 	int exists = stat(archiveName,&archStats);
 
@@ -81,6 +80,9 @@ void appendFiles(int argc, char *argv[]){
 		
 		//build write char array (to be written to file)
 		char toWrite[bytes + 1];	//one extra space for null termination character
+		for (int i = 0; i < bytes + 1; ++i){
+			toWrite[i] = '\0';
+		}
 		char* archHeader = "!<arch>\n";
 		for (int i = 0; i < 8; ++i){
 			toWrite[i] = archHeader[i];
@@ -96,8 +98,8 @@ void appendFiles(int argc, char *argv[]){
 				continue;
 			}
 
-			//First Build Header
-			int headerSize = 61; //chars in the header + null char
+			//First Build file header, then put it on the toWrite string
+			int headerSize = 61; //60 chars + null char
 			char header[headerSize];
 
 			int nameLen = strlen(fileName);
@@ -107,37 +109,33 @@ void appendFiles(int argc, char *argv[]){
 			for (int i = nameLen; i < 16; ++i){
 				header[i] = ' ';
 			}
+			header[16] = '\0';			
 			printf("name %s\n",header);
 
 			char timestamp[13];
 			int n = sprintf(timestamp, "%ld", fileStats.st_mtime);
 			addWhitespace(timestamp, 13);
 			strcat(header, timestamp);
-			printf("timestamp %s\n",timestamp);
 
 			char ownerID[7];
 			n = sprintf(ownerID, "%u", fileStats.st_uid);
 			addWhitespace(ownerID, 7);
 			strcat(header, ownerID);
-			printf("ownerID %s\n",ownerID);
 
 			char groupID[7];
 			n = sprintf(groupID, "%u", fileStats.st_gid);
 			addWhitespace(groupID, 7);
 			strcat(header, groupID);
-			printf("groupid %s\n",groupID);
 
 			char mode[9];
 			n = sprintf(mode, "%o", fileStats.st_mode);
 			addWhitespace(mode, 9);
 			strcat(header, mode);
-			printf("mode %s\n",mode);
 
 			char fileSize[11];
 			n = sprintf(fileSize, "%lld", fileStats.st_size);
 			addWhitespace(fileSize, 11);
 			strcat(header, fileSize);
-			printf("size %s\n",fileSize);
 
 			char end[3];
 			end[0] = '\x60';
@@ -145,6 +143,8 @@ void appendFiles(int argc, char *argv[]){
 			strcat(header, end);
 
 			header[60] = '\0';
+
+			
 
 			printf("ultimate header: %s", header);
 			printf("header size: %lu\n", strlen(header));
