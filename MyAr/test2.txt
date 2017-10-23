@@ -1,10 +1,1 @@
-This is
-A second
-test.
-
-This file is so cool. It just keeps on going...
-
-and going...
-
-and going...
-gone.
+!<arch>
