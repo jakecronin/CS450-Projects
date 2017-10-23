@@ -1,5 +1,6 @@
 /*
 THIS CODE IS MY OWN WORK AND I WROTE IT WITHOUT CONSULTING A TUTOR
+-Jake Cronin
 
 Extra Credit Attempts:
 	1) -q supports multiple files on command line
@@ -47,15 +48,12 @@ int main(int argc, char *argv[]){
 	int flagVal = flag[1];	
 	switch (flagVal){
 		case 'q':
-		printf("flag is a q\n");
 		appendFiles(argc, argv);
 		break;
 		case 'x':
-		printf("flag is an x\n");
 		extract(argc, argv);
 		break;
 		case 't':
-		printf("flag is a t\n");
 		printTable(argc, argv);
 		break;
 		case 'v':
@@ -65,7 +63,6 @@ int main(int argc, char *argv[]){
 		printf("flag is a d\n");
 		break;
 		case 'A':
-		printf("flag is an A\n");
 		addAllRecent(argc, argv);
 		break;
 		default:
@@ -344,11 +341,11 @@ void extract(int argc, char *argv[]){
 			//write(fileDesc, content, contentSize);
 			utime(fileName, timeBuff);
 			close(fileDesc);
-			printf("mode string is %s\n", mode);
-			printf("perm val is %d\n", permVal);
-			printf("mode val is %d\n", modeVal);
-			printf("perm string is %s\n", perms);
-			printf("modeT is %d\n", modeT);
+			//printf("mode string is %s\n", mode);
+			//printf("perm val is %d\n", permVal);
+			//printf("mode val is %d\n", modeVal);
+			//printf("perm string is %s\n", perms);
+			//printf("modeT is %d\n", modeT);
 		}	
 	}
 	return;
