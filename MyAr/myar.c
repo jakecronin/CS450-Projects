@@ -1,7 +1,6 @@
 /*
 THIS CODE IS MY OWN WORK AND I WROTE IT WITHOUT CONSULTING A TUTOR
 -Jake Cronin
-
 Extra Credit Attempts:
 	1) -q supports multiple files on command line
 	2) -x suppots multiple files on command line
@@ -17,6 +16,7 @@ Extra Credit Attempts:
 #include <utime.h>
 #include <dirent.h>
 #include <time.h>
+#include <errno.h>
 
 void appendFiles(int argc, char *argv[]);
 void addWhitespace(char *str, int size);
@@ -166,7 +166,7 @@ void appendFiles(int argc, char *argv[]){
 		strcat(header, mode);
 
 		char fileSize[11];
-		n = sprintf(fileSize, "%lld", fileStats.st_size);
+		n = sprintf(fileSize, "%jd", fileStats.st_size);
 		addWhitespace(fileSize, 11);
 		strcat(header, fileSize);
 
@@ -216,7 +216,7 @@ void trimWhitespace(char* str){
 	}
 }
 void extract(int argc, char *argv[]){
-	//build linkedlist of filenames
+	//build linkedlist of filename
 	node * head = NULL;
 	head = malloc(sizeof(node));
 	strcpy(head->filename, argv[3]);
@@ -269,10 +269,11 @@ void extract(int argc, char *argv[]){
 				}
 			}
 			if (match){	//if found a match, extract it
+				printf("got match on fileName: %s\n", fileName);
 				break;
 			}
 		}
-		
+		printf("going to extract: %s\n", fileName);
 		//get parts of header and file contents
 		trimWhitespace(fileName);
 
@@ -306,10 +307,9 @@ void extract(int argc, char *argv[]){
 		for (int i = 0; i < 4; ++i){
 			perms[i] = mode[i+2];
 		}
-		//printf("first four chars are %s\n", perms);
-		//long int strtol() octalPerms;
-		//sscanf(perms, "%o", octalPerms);
-		//printf("octal perms: %d\n", octalPerms);
+
+		int octalPerm;
+		sscanf(perms, "%o", &octalPerm);
 		int permVal = atoi(perms);
 		int modeVal = atoi(mode);
 		mode_t modeT = modeVal;
@@ -334,6 +334,20 @@ void extract(int argc, char *argv[]){
 		}
 
 		if (runner != NULL){	//if found match, remove link and create file
+			printf("filename: %s\n", fileName);
+			int fileDesc = open(fileName, O_TRUNC | O_CREAT | O_RDWR, octalPerm);
+			if (fileDesc < 0){
+				printf("Error opening file. errno: %d\n", errno);
+			}
+			n = write(fileDesc, content, contentSize);
+			if (n < 0){
+				printf("Error writing to file. errno: %d\n", errno);
+			}
+			chmod(fileName, octalPerm);
+			chown(fileName, ownerIDNum, groupIDNum);
+			//write(fileDesc, content, contentSize);
+			utime(fileName, timeBuff);
+			close(fileDesc);
 			if (runner == head){
 				head = runner->next;
 			}
@@ -344,18 +358,6 @@ void extract(int argc, char *argv[]){
 				runner->next->prev = runner->prev;
 			}
 			free(runner);
-			int fileDesc = open(fileName, O_TRUNC | O_CREAT | O_RDWR, modeT);
-			n = write(fileDesc, content, contentSize);
-			chmod(fileName, modeT);
-			chown(fileName, ownerIDNum, groupIDNum);
-			//write(fileDesc, content, contentSize);
-			utime(fileName, timeBuff);
-			close(fileDesc);
-			//printf("mode string is %s\n", mode);
-			//printf("perm val is %d\n", permVal);
-			//printf("mode val is %d\n", modeVal);
-			//printf("perm string is %s\n", perms);
-			//printf("modeT is %d\n", modeT);
 		}	
 	}
 	return;
@@ -508,5 +510,3 @@ void addAllRecent(int argc, char *argv[]){
 	return;
 
 }
-
-
