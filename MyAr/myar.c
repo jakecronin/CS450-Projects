@@ -4,6 +4,8 @@ THIS CODE IS MY OWN WORK AND I WROTE IT WITHOUT CONSULTING A TUTOR
 Extra Credit Attempts:
 	1) -q supports multiple files on command line
 	2) -x suppots multiple files on command line
+	3) -v is functional
+
 */
 
 #include <stdlib.h>
@@ -24,6 +26,8 @@ void extract(int argc, char *argv[]);
 void trimWhitespace(char* str);
 void printTable(int argc, char *argv[]);
 void addAllRecent(int argc, char *argv[]);
+void printVerbose(int argc, char *argv[]);
+void printPermTextFromOctal(mode_t mode);
 char *useage = "Usage: ./myar key afile filename ...\nq\tquickly append named files to archive\nx\textract named files\nt\tprint a concise table of contents of the archive\nv\tprint a verbose table of contents of the archive\nd\tdelete named files from archive\nA\tquickly append \"ordinary\" files in the current directory that have been modified within the last two hours\n";
 
 typedef struct _node{
@@ -63,7 +67,7 @@ int main(int argc, char *argv[]){
 		printTable(argc, argv);
 		break;
 		case 'v':
-		printf("v flag not in use\n");
+		printVerbose(argc, argv);
 		break;
 		case 'd':
 		printf("d flag not in use\n");
@@ -217,6 +221,10 @@ void trimWhitespace(char* str){
 }
 void extract(int argc, char *argv[]){
 	//build linkedlist of filename
+	if (argc < 4){
+		printf("%s\n", useage);
+		return;
+	}
 	node * head = NULL;
 	head = malloc(sizeof(node));
 	strcpy(head->filename, argv[3]);
@@ -269,11 +277,11 @@ void extract(int argc, char *argv[]){
 				}
 			}
 			if (match){	//if found a match, extract it
-				printf("got match on fileName: %s\n", fileName);
+				//printf("got match on fileName: %s\n", fileName);
 				break;
 			}
 		}
-		printf("going to extract: %s\n", fileName);
+		//printf("going to extract: %s\n", fileName);
 		//get parts of header and file contents
 		trimWhitespace(fileName);
 
@@ -334,7 +342,7 @@ void extract(int argc, char *argv[]){
 		}
 
 		if (runner != NULL){	//if found match, remove link and create file
-			printf("filename: %s\n", fileName);
+			//printf("filename: %s\n", fileName);
 			int fileDesc = open(fileName, O_TRUNC | O_CREAT | O_RDWR, octalPerm);
 			if (fileDesc < 0){
 				printf("Error opening file. errno: %d\n", errno);
@@ -509,4 +517,132 @@ void addAllRecent(int argc, char *argv[]){
 	}
 	return;
 
+}
+void printVerbose(int argc, char *argv[]){
+	printf("in print verbose\n");
+	//open archive and set offset to first header
+	char* archiveName = argv[2];
+	struct stat archStats;
+	int exists = stat(archiveName,&archStats);
+	if (exists == -1){
+		printf("Error, archive not found\n");
+		return;
+	}
+	int archDesc = open(archiveName, O_RDONLY);
+	if (lseek(archDesc, 8, SEEK_SET) < 0){
+		printf("Error with archive file.\n");
+		return;
+	}
+
+	char header[61];	//hold header
+	int n = read(archDesc, header, 60);
+	header[60] = '\0';
+	if (n < 60 && n > 0) {
+		printf("Error in archive formatting\n");
+		return;	//archive does not contain any headers
+	}
+	while (n > 0){
+		//first get and print permissions
+		char mode[9];
+		for (int i = 0; i < 8; ++i){
+			mode[i] = header[i+40];
+		} mode[8] = '\0';
+		int octalPerm;
+		sscanf(mode, "%o", &octalPerm);
+		printPermTextFromOctal(octalPerm);
+		printf("  ");
+
+	    //now print owner ID and Group ID	    
+	    char ownerID[7];
+		for (int i = 0; i < 6; ++i){
+			ownerID[i] = header[i+28];
+		} ownerID[6] = '\0';
+		uid_t ownerIDNum = atoi(ownerID);
+		sprintf(ownerID, "%d", ownerIDNum);
+		for (int i = 0; i < 6 - strlen(ownerID); ++i){
+			printf(" ");
+		}
+		printf("%s/", ownerID);
+
+		//trimWhitespace(ownerID);
+		char groupID[7];
+		for (int i = 0; i < 6; ++i){
+			groupID[i] = header[i+34];
+		} groupID[6] = '\0';
+		gid_t groupIDNum = atoi(groupID);
+		sprintf(groupID, "%d", groupIDNum);
+		printf("%s", groupID);
+		for (int i = 0; i < 6 - strlen(groupID); ++i){
+			printf(" ");
+		}
+
+		trimWhitespace(groupID);
+		//printf("%d/%d", ownerIDNum, groupIDNum);
+
+		//print size
+		char size[11];
+		for (int i = 0; i < 10; ++i){
+			size[i] = header[i+48];
+		} size[10] = '\0';
+		int contentSize = atoi(size);
+		trimWhitespace(size);
+		char leftAligned[11];
+		for (int i = 0; i < 10; ++i){	//fill with spaces
+			leftAligned[i] = ' ';
+		}
+		leftAligned[10] = '\0';
+		for (int i = 0; i < strlen(size); --i){	//fill in numbers from left
+			leftAligned[10 - i] = size[strlen(size) - 1 - i];
+		}
+		printf("%s", leftAligned);
+
+		//print time
+		char timestamp[13];
+		for (int i = 0; i < 12; ++i){
+			timestamp[i] = header[i+16];
+		} timestamp[12] = '\0';
+		trimWhitespace(timestamp);
+		time_t tTime = atoi(timestamp);
+		struct tm *timeBuff;
+		time(&tTime);
+		timeBuff = localtime(&tTime);
+		char date[18];
+		date[17] = '\0';
+		char * format = "%b %d %H:%M %Y";
+		strftime(date, 17, format, timeBuff);
+		printf(" %s ", date);
+
+		char fileName[17];
+		fileName[16] = '\0';
+		for (int i = 0; i < 16; ++i){
+			fileName[i] = header[i];
+		}
+		trimWhitespace(fileName);
+		printf("%s\n",fileName);
+		//adjust for even text alignment
+		if (contentSize % 2 == 1){
+			contentSize = contentSize + 1;
+		}
+		if (lseek(archDesc, contentSize, SEEK_CUR) < 0){
+			printf("Error with archive file.\n");
+			return;
+		}
+
+		//read next header
+		n = read(archDesc, header, 60);
+		header[60] = '\0';
+	}
+
+}
+
+void printPermTextFromOctal(mode_t mode){
+	    printf( (mode & S_IRUSR) ? "r" : "-");
+	    printf( (mode & S_IWUSR) ? "w" : "-");
+	    printf( (mode & S_IXUSR) ? "x" : "-");
+	    printf( (mode & S_IRGRP) ? "r" : "-");
+	    printf( (mode & S_IWGRP) ? "w" : "-");
+	    printf( (mode & S_IXGRP) ? "x" : "-");
+	    printf( (mode & S_IROTH) ? "r" : "-");
+	    printf( (mode & S_IWOTH) ? "w" : "-");
+	    printf( (mode & S_IXOTH) ? "x" : "-");
 }
