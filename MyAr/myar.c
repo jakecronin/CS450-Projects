@@ -28,6 +28,7 @@ void printTable(int argc, char *argv[]);
 void addAllRecent(int argc, char *argv[]);
 void printVerbose(int argc, char *argv[]);
 void printPermTextFromOctal(mode_t mode);
+void delete(int argc, char *artv[]);
 char *useage = "Usage: ./myar key afile filename ...\nq\tquickly append named files to archive\nx\textract named files\nt\tprint a concise table of contents of the archive\nv\tprint a verbose table of contents of the archive\nd\tdelete named files from archive\nA\tquickly append \"ordinary\" files in the current directory that have been modified within the last two hours\n";
 
 typedef struct _node{
@@ -392,63 +393,44 @@ void printTable(int argc, char *argv[]){
 		return;
 	}
 
-
-	//build linkedlist that populates as we run through archive
-	node * head = NULL;
-	head = malloc(sizeof(node));
-	head->next = NULL;
-	head->prev = NULL;
-	node * runner = head;
-	char header[61];	//get first header
+	char header[61];	//hold header
 	int n = read(archDesc, header, 60);
-	if (n < 60) {
+	header[60] = '\0';
+	if (n < 60 && n > 0) {
 		printf("Error in archive formatting\n");
 		return;	//archive does not contain any headers
 	}
-	header[60] = '\0';
-	for (int i = 0; i < 16; ++i){
-		head->filename[i] = header[i];
-	} head->filename[16] = '\0';
-	trimWhitespace(head->filename);
-	char size[11];
-	for (int i = 0; i < 10; ++i){
-		size[i] = header[i+48];
-	} size[10] = '\0';
-	int contentSize = atoi(size);
-	if (lseek(archDesc, contentSize, SEEK_CUR) < 0){
-		printf("Error with archive file.\n");
-		return;
-	}
-	while(1){	//continue until run through whole archive
-		//get next header
-		int n = read(archDesc, header, 60);
-		if (n < 60) {
-			while(runner != NULL){
-				printf("%s\n", runner->filename);
-				runner = runner->prev;
-			}
-			return;	//natural ending when end of archive is reached
-		}
-		//add new link
-		runner->next = malloc(sizeof(node));
-		runner->next->prev = runner;
-		runner = runner->next;
-
-		header[60] = '\0';
-		for (int i = 0; i < 16; ++i){
-			runner->filename[i] = header[i];
-		} runner->filename[16] = '\0';
-		trimWhitespace(runner->filename);
+	while (n > 0){
+		//first get and print permissions
+		
 		char size[11];
 		for (int i = 0; i < 10; ++i){
 			size[i] = header[i+48];
 		} size[10] = '\0';
 		int contentSize = atoi(size);
+
+		char fileName[17];
+		fileName[16] = '\0';
+		for (int i = 0; i < 16; ++i){
+			fileName[i] = header[i];
+		}
+		trimWhitespace(fileName);
+		printf("%s\n",fileName);
+		
+		//adjust for even text alignment
+		if (contentSize % 2 == 1){
+			contentSize = contentSize + 1;
+		}
 		if (lseek(archDesc, contentSize, SEEK_CUR) < 0){
 			printf("Error with archive file.\n");
 			return;
 		}
+
+		//read next header
+		n = read(archDesc, header, 60);
+		header[60] = '\0';
 	}
+
 }
 void addAllRecent(int argc, char *argv[]){
 	//open current directory
@@ -519,7 +501,6 @@ void addAllRecent(int argc, char *argv[]){
 
 }
 void printVerbose(int argc, char *argv[]){
-	printf("in print verbose\n");
 	//open archive and set offset to first header
 	char* archiveName = argv[2];
 	struct stat archStats;
@@ -632,7 +613,9 @@ void printVerbose(int argc, char *argv[]){
 		n = read(archDesc, header, 60);
 		header[60] = '\0';
 	}
-
+}
+void delete(int argc, char *artv[]){
+	//not in function
 }
 
 void printPermTextFromOctal(mode_t mode){
