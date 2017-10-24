@@ -85,56 +85,30 @@ void appendFiles(int argc, char *argv[]){
 	if (argc < 4){
 		printf("Not enough arguments to append files\n%s", useage);
 	}
-
-	//Calculate Write Size
-	int bytes = 0; //aggregate number of bytes to write to file
-	//for (int i = argc - 1; i >= 3; i--){	//for each file, got contents size
-	for (int i = 3; i < argc; i++){
-		char* fileName = argv[i];
-		struct stat fileStats;
-		int exists = stat(fileName, &fileStats);
-		if (exists == -1){
-			//printf("Invalid not found: %s\n", fileName);
-			continue;
-		}
-		bytes = bytes + 60;	//add 60 bytes for file header
-		bytes = bytes + fileStats.st_size;	//add file size
-		if (fileStats.st_size % 2){
-			bytes = bytes + 1; //add buffer \n character to keep data 2 byte aligned
-		}
-	}
+	
 	char* archiveName = argv[2];
 	struct stat archStats;
-	int exists = stat(archiveName,&archStats);
-	if (exists == -1){
-		bytes = bytes + 8;	//add bytes for archive header
-	}
-
-	//BUILD STRING TO WRITE TO FILE
-	char toWrite[bytes + 1];	//aggregate string of content to be written
-	for (int i = 0; i < bytes + 1; ++i){
-			toWrite[i] = '\0';
-	}
 	int archDesc;
+	int exists = stat(archiveName,&archStats);
 	if (exists == -1){	//add archive header if necessary
 		archDesc = open(archiveName, O_CREAT | O_RDWR | O_TRUNC, 0666);
-		//printf("need to create archive file\n");
 		char* archHeader = "!<arch>\n";
-		for (int i = 0; i < 8; ++i){
-			toWrite[i] = archHeader[i];
-		}
-		toWrite[8] = '\0';
+		write(archDesc, archHeader, 8);
 	}else{
 		archDesc = open(archiveName, O_APPEND | O_WRONLY, 0666);
+		if (archDesc < 0){
+			printf("Error opening archive %d\n", archDesc);
+			return;
+		}
 	}
+
 	//Add header + body for each file
-	//for (int i = argc - 1; i >= 3; i--){
 	for (int i = 3; i < argc; i++){
 		char* fileName = argv[i];
 		struct stat fileStats;
 		int exists = stat(fileName, &fileStats);
 		if (exists == -1){
-			//printf("Invalid not found: %s\n", fileName);
+			printf("Invalid not found: %s\n", fileName);
 			continue;
 		}
 		//First Build file header, then put it on the toWrite string
@@ -179,30 +153,52 @@ void appendFiles(int argc, char *argv[]){
 		header[59] = '\x0A';
 		header[60] = '\0';
 
-		//Add header to write contents
-		strcat(toWrite, header);
-		//Second get file contents
-		char fileContents[fileStats.st_size];
-		int fileDesc = open(fileName, O_RDONLY);
-		n = read(fileDesc, fileContents, fileStats.st_size);
+		//Write Header
+		if  (write(archDesc, header, 60) < 0){
+			printf("error writing header: %d\n", errno);
+		}
 
-		int len = strlen(toWrite);
-		for (int i = 0; i < fileStats.st_size; ++i){
-		 	toWrite[len++] = fileContents[i];
+		//Write file contents in a loop		
+		int fd = open(fileName, O_RDONLY);
+		if (fd < 0){
+			printf("Error getting file descriptor, errno %d\n", errno);
+			continue;
 		}
-		if (fileStats.st_size % 2){
-			toWrite[len++] = '\n';	//buffer to keep data 2 byte aligned
+		size_t bytesToRead = fileStats.st_size;
+		char content[fileStats.st_size];
+		size_t bytesRead = 0;
+		do{
+			if ((n = read(fd, &((char *)content)[bytesRead], bytesToRead - bytesRead)) == -1){
+				if (errno == EINTR){
+					printf("encountered system interruption, continuing\n");
+					continue;	//just an interruption, keep going
+				}else{
+					printf("error reading file: %d\n", errno);
+					return;
+				}
+			}
+			if (n == 0){	//nothing read on this call
+				break;	//finished reading
+			}
+			bytesRead += n;
+			//printf("bytes read: %d\n", n);
+		}while(bytesToRead > bytesRead);
+		//printf("total bytes read: %d\n", bytesRead);
+		//printf("content: %s\n", content);
+		int w = write(archDesc, content, bytesRead);
+		if (w < 0){
+			printf("error writing to file: errno: %d\n", errno);
 		}
-		toWrite[len++] = '\0';
-		//fileContents[fileStats.st_size] = '\0';
-		// strcat(toWrite, fileContents);	//add file contents onto header
+		if (w < bytesToRead){
+			printf("Error, did not write entire file. %d", errno);
+		}
+
 		// if (fileStats.st_size % 2){
-		// 	strcat(toWrite, "\n");	//buffer to keep data 2 byte aligned
+		// 	printf("writing odd char\n");
+		// 	write(archDesc, '\n', 1);	//buffer to keep data 2 byte aligned
 		// }
-		close(fileDesc);
+		close(fd);
 	}
-	toWrite[bytes] = '\0';	//make sure it is null terminated
-	int written = write(archDesc, toWrite, bytes);
 	close(archDesc);
 }
 void addWhitespace(char* str, int size){
@@ -267,9 +263,10 @@ void extract(int argc, char *argv[]){
 		//Check each filename in list
 		runner = head;
 		char* fileName;
+		int match = 0;
 		while(runner != NULL){
 			fileName = runner->filename;
-			int match = 1;
+			match = 1;
 			for (int i = 0; i < 16; ++i){	//check for name match in list
 				if (header[i] != fileName[i]){	//compare character by character
 					match = 0;
@@ -278,14 +275,29 @@ void extract(int argc, char *argv[]){
 				}
 			}
 			if (match){	//if found a match, extract it
-				//printf("got match on fileName: %s\n", fileName);
 				break;
 			}
 		}
-		//printf("going to extract: %s\n", fileName);
-		//get parts of header and file contents
-		trimWhitespace(fileName);
 
+		//first get size of file. Need this for both reading and seeking
+		char size[11];
+		for (int i = 0; i < 10; ++i){
+			size[i] = header[i+48];
+		} size[10] = '\0';
+		int contentSize = atoi(size);
+		if (contentSize % 2 == 1){
+			contentSize = contentSize + 1;
+		}
+
+		if (match == 0){	//no match for this header, go to next one;
+			if (lseek(archDesc, contentSize, SEEK_CUR) < 0){
+				printf("Error with archive file.\n");
+				return;
+			}
+			continue;
+		}
+
+		trimWhitespace(fileName);	//legacy. not sure if safe to delete
 		char timestamp[13];
 		for (int i = 0; i < 12; ++i){
 			timestamp[i] = header[i+16];
@@ -322,56 +334,70 @@ void extract(int argc, char *argv[]){
 		int permVal = atoi(perms);
 		int modeVal = atoi(mode);
 		mode_t modeT = modeVal;
-		char size[11];
-		for (int i = 0; i < 10; ++i){
-			size[i] = header[i+48];
-		} size[10] = '\0';
-		int contentSize = atoi(size);
-		if (contentSize % 2 == 1){
-			contentSize = contentSize + 1;
-		}
+
+
+		//Load content into array from archive file
 		char content[contentSize + 1];
-		n = read(archDesc, content, contentSize);
-		if (n < contentSize){
-			printf("could not load full content. Archive file not formatted correctly\n");
-			return;
-		}
+		size_t bytesToRead = contentSize;
+		size_t bytesRead = 0;
+		do{
+			if ((n = read(archDesc, &((char *)content)[bytesRead], bytesToRead - bytesRead)) == -1){
+				if (errno == EINTR){
+					printf("encountered system interruption, continuing\n");
+					continue;	//just an interruption, keep going
+				}else{
+					printf("error reading file: %d\n", errno);
+					return;
+				}
+			}
+			if (n == 0){	//nothing read on this call
+				break;	//finished reading
+			}
+			bytesRead += n;
+			//printf("bytes read: %d\n", n);
+		}while(bytesToRead > bytesRead);
+
 		if (contentSize % 2 == 1){
 			content[contentSize - 1] = '\0';
 		}else{
 			content[contentSize] = '\0';
 		}
 
-		if (runner != NULL){	//if found match, remove link and create file
-			//printf("filename: %s\n", fileName);
-			int fileDesc = open(fileName, O_TRUNC | O_CREAT | O_RDWR, octalPerm);
-			if (fileDesc < 0){
-				printf("Error opening file. errno: %d\n", errno);
+		//printf("filename: %s\n", fileName);
+		int fd = open(fileName, O_TRUNC | O_CREAT | O_RDWR, octalPerm);
+		if (fd < 0){
+			printf("Error opening file. errno: %d\n", errno);
+		}
+		ssize_t bytesWritten = 0;
+		do{
+			if ((n = write(fd, &((char *)content)[bytesWritten], contentSize - bytesWritten)) == -1){
+				if (errno == EINTR){
+					continue;	//ignore system interruption
+				}else{
+					printf("Error writing file. Errno: %d \n", errno);
+					return;
+				}
 			}
-			n = write(fileDesc, content, contentSize);
-			if (n < 0){
-				printf("Error writing to file. errno: %d\n", errno);
-			}
-			chmod(fileName, octalPerm);
-			chown(fileName, ownerIDNum, groupIDNum);
-			//write(fileDesc, content, contentSize);
-			utime(fileName, timeBuff);
-			close(fileDesc);
-			if (runner == head){
-				head = runner->next;
-			}
-			if (runner->prev != NULL){
-				runner->prev->next = runner->next;
-			}
-			if (runner->next != NULL){
-				runner->next->prev = runner->prev;
-			}
-			free(runner);
-		}	
+			bytesWritten += n;
+		}while(bytesWritten < contentSize);
+
+		
+		chmod(fileName, octalPerm);
+		chown(fileName, ownerIDNum, groupIDNum);
+		utime(fileName, timeBuff);
+		close(fd);
+		if (runner == head){
+			head = runner->next;
+		}
+		if (runner->prev != NULL){
+			runner->prev->next = runner->next;
+		}
+		if (runner->next != NULL){
+			runner->next->prev = runner->prev;
+		}
 	}
 	return;
 		
-
 	//bring archive descriptor to first header
 	
 	//extracts all individual fils if no arguments given
@@ -416,7 +442,7 @@ void printTable(int argc, char *argv[]){
 		}
 		trimWhitespace(fileName);
 		printf("%s\n",fileName);
-		
+
 		//adjust for even text alignment
 		if (contentSize % 2 == 1){
 			contentSize = contentSize + 1;
