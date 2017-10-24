@@ -24,6 +24,7 @@ void extract(int argc, char *argv[]);
 void trimWhitespace(char* str);
 void printTable(int argc, char *argv[]);
 void addAllRecent(int argc, char *argv[]);
+void printVerbose(int argc, char *argv[]);
 char *useage = "Usage: ./myar key afile filename ...\nq\tquickly append named files to archive\nx\textract named files\nt\tprint a concise table of contents of the archive\nv\tprint a verbose table of contents of the archive\nd\tdelete named files from archive\nA\tquickly append \"ordinary\" files in the current directory that have been modified within the last two hours\n";
 
 typedef struct _node{
@@ -31,6 +32,12 @@ typedef struct _node{
 	struct _node *next;
 	struct _node *prev;
 }node;
+
+typedef struct _headerNode{
+	char header[61];
+	struct _headerNode *next;
+	struct _headerNode *prev;
+}hNode;
 
 /*MARK: Begin Functions*/
 int main(int argc, char *argv[]){
@@ -57,10 +64,10 @@ int main(int argc, char *argv[]){
 		printTable(argc, argv);
 		break;
 		case 'v':
-		printf("flag is a v\n");
+		printVerbose(argc, argv);
 		break;
 		case 'd':
-		printf("flag is a d\n");
+		printf("flag d not in use\n");
 		break;
 		case 'A':
 		addAllRecent(argc, argv);
@@ -498,7 +505,128 @@ void addAllRecent(int argc, char *argv[]){
 	return;
 
 }
+void printVerbose(int argc, char *argv[]){
+	//open archive and set offset to first header
+	char* archiveName = argv[2];
+	struct stat archStats;
+	int exists = stat(archiveName,&archStats);
+	if (exists == -1){
+		printf("Error, archive not found\n");
+		return;
+	}
+	int archDesc = open(archiveName, O_RDONLY);
+	if (lseek(archDesc, 8, SEEK_SET) < 0){
+		printf("Error with archive file.\n");
+		return;
+	}
 
+
+	//build linkedlist that populates as we run through archive
+	hNode * head = NULL;
+	head = malloc(sizeof(hNode));
+	head->next = NULL;
+	head->prev = NULL;
+	hNode * runner = head;
+	char header[61];	//get first header
+	int n = read(archDesc, header, 60);
+	if (n < 60) {
+		printf("Error in archive formatting\n");
+		return;	//archive does not contain any headers
+	}
+	header[60] = '\0';
+	for (int i = 0; i < 60; ++i){
+		//format header to string line
+		head->filename[i] = header[i];
+	} head->filename[61] = '\0';
+
+	//move to next header
+	char size[11];
+	for (int i = 0; i < 10; ++i){
+		size[i] = header[i+48];
+	} size[10] = '\0';
+	int contentSize = atoi(size);
+	if (lseek(archDesc, contentSize, SEEK_CUR) < 0){
+		printf("Error with archive file.\n");
+		return;
+	}
+	while(1){	//continue until run through whole archive
+		//get next header
+		int n = read(archDesc, header, 60);
+		if (n < 60) {
+			while(runner != NULL){
+				printf("%s\n", runner->filename);
+				runner = runner->prev;
+			}
+			return;	//natural ending when end of archive is reached
+		}
+		//add new link
+		runner->next = malloc(sizeof(hNode));
+		runner->next->prev = runner;
+		runner = runner->next;
+
+		header[60] = '\0';
+		for (int i = 0; i < 16; ++i){
+			runner->filename[i] = header[i];
+		} runner->filename[16] = '\0';
+		trimWhitespace(runner->filename);
+		char size[11];
+		for (int i = 0; i < 10; ++i){
+			size[i] = header[i+48];
+		} size[10] = '\0';
+		int contentSize = atoi(size);
+		if (lseek(archDesc, contentSize, SEEK_CUR) < 0){
+			printf("Error with archive file.\n");
+			return;
+		}
+	}
+}
+void insertPermissionText(char* str, int perms){
+
+	
+
+	if (S_ISDIR(fileStat.st_mode)){
+		str[0] = 'd';
+	}else{
+		str[0] = '-';
+	}
+   if (fileStat.st_mode & S_IRUSR){
+   		str[1] = 'r';
+   	}else{
+   	 	str[1] = '-';
+	}
+
+    if (fileStat.st_mode & S_IWUSR){
+      str[2] = 'w';
+    }else{ 
+    	str[2] = '-';
+	}
+	if (fileStat.st_mode & S_IXUSR){
+		str[3] = 'x';
+	}else{
+		str[3] = '-';
+	}
+	if (fileStat.st_mode & S_IRGRP){
+		str[4] = 'r';
+	}else{
+		str[4] = '-';
+	}
+
+	if (fileStat.st_mode & S_IWGRP){
+		str[5] = 'w';
+	}else{
+		str[5] = '-';
+	}
+
+	if (fileStat.st_mode & S_IXGRP){
+		str[6] = 'x';
+	}else{
+		str[6] = '-'
+	}
+    str[7] = ((fileStat.st_mode & S_IXGRP) ? 'x' : '-');
+    str[8] = ((fileStat.st_mode & S_IROTH) ? 'r' : '-');
+    str[9] =  ((fileStat.st_mode & S_IWOTH) ? 'w' : '-');
+    str[10] = ((fileStat.st_mode & S_IXOTH) ? 'x' : '-');
+}
 
 
 
