@@ -11,6 +11,7 @@ THIS CODE IS MY OWN WORK AND I WROTE IT WITHOUT CONSULTING A TUTOR
 #include <math.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <errno.h>
 
 
 
@@ -18,7 +19,7 @@ char *useage = "Usage: ./manage\n";
 
 typedef struct _msg{
 	long mtype;
-	char mtext[30];
+	int mdata;
 }msgbuf;
 
 
@@ -36,6 +37,8 @@ typedef struct _shm_buf{
 	process processes[20];
 }shm_buf;
 
+shm_buf * shmaddr;		//global address for shared memory
+
 int main(int argc, char *argv[]){
 	if (argc != 1){
 		printf("%s",useage);
@@ -44,9 +47,10 @@ int main(int argc, char *argv[]){
 	int key = 60302;
 
 	//create or find + link shared 
-	process * shmaddr;	//address of shared memory
+	//shm_buf * shmaddr;	//address of shared memory
 	int shmid;		//shared memory id
 	long shmsize = sizeof(shm_buf);	//size of shared memory
+	shmsize = 400;
 	printf("going to get shared memory of size: %lu\n", shmsize);
 	if ((shmid = shmget(key, shmsize, IPC_CREAT | 0666)) < 0){	//find or create shared memory
 		printf("got shared memory id: %d\n", shmid);
@@ -70,20 +74,34 @@ int main(int argc, char *argv[]){
 
 	msgkey = ftok(".", 'j');
 
-	if ((msqid = msgget(key, flags)) == -1){
+	if ((msqid = msgget(key, flags | 0666)) == -1){
 		printf("Error opening message queue in Compute\n");
 		exit(1);
 	}
 
 	//Recieve messages
-	msgbuf * message;
-	message = calloc(1, sizeof(msgbuf));
-	message->mtype = 0;	//set message type to zero to always get first value of msg queue
-
+	msgbuf message;
 	while(1){
 		printf("Manage going to wait for messages\n");
-		msgrcv(msqid, message, sizeof(message->mtext), 0, 0);
-		printf("Processing message: %s\n", message->mtext);
+		if ((msgrcv(msqid, &message, sizeof(message.mdata), -2, 0)) < 0){	//receive only type 1 and type 2 messages (pids and perfs)
+			printf("Error recieving message. Errno: %d\n", errno);
+			break;
+		}
+		printf("Processing message: %d of type %lu\n", message.mdata, message.mtype);
+		switch(message.mtype){
+			case 1:
+				if (addPidToTable(message.mdata) == -1){
+					printf("compute process %d exceeds process table. Killed by manage\n", message.mdata);
+					kill(message.mdata, SIGINT);
+				}
+				break;
+			case 2:
+				printf("got a new perfect\n");
+				break;
+			default:
+				printf("Manage read weird message of type: %d with data %d\n", message.mdata,message.mtype);
+				break;
+		}
 	}	
 
 	//detach shared memory
@@ -96,9 +114,10 @@ int main(int argc, char *argv[]){
 	return 0;
 }
 
-
-
-
+int addPidToTable(int pid){	//return -1 if process table is full, terminates compute process
+	printf("adding pid %d to table\n", pid);
+	return -1;
+}
 
 
 
