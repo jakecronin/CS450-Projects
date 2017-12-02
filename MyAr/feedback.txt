@@ -1,0 +1,24 @@
+jpcroni 70
+q - wrong(files with odd length)
+t - wrong(doesn't handle '/' attached to file names)
+x - wrong(not working with system archive, missing file)
+A - wrong(Function not working, but has some correct parts)
+v - wrong(file name wrong)	
+
+-Handles large files buffer at a time                                  - yes
+-Buffer size from stat (once can be enough, its all in same directory) - yes
+-extract restores atime/mtime to old mtime                             - yes
+-extract restores permission (archive a 604, remove it, and see if the 
+ extract gets 604)                                                     - yes
+-check that it skips symbolic links on "A" rather than following them  - yes
+-check that it read/write ar_hdr in one read/write                     - yes
+-check that it only uses read/write/lseek for IO                       - yes
+-check that it handles files with odd length properly                  - no
+-check that myar can process ar produced archive and the reverse       - no
+
+--- 551 required (450 option)
+-check multiple file names on "q" does not start from scratch on each 
+ filename (ie reopen archive, check magic number, etc)                 - yes
+-check v option gives same info as system ar. Format readable need not be 
+ exactly the same.                                                     - not quite
+-check delete option uses the unlink strategy (and of course works)    - no
