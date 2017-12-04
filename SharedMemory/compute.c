@@ -42,14 +42,15 @@ int processIndex;	//index of this process in shared memory process array
 int msqid;
 int pid;
 
-int incrementTested(shm_buf * address);
-int incrementSkipped(shm_buf * address);
-int incrementFound(shm_buf * address);
-int setTested(shm_buf * address, int val);
-int isTested(shm_buf * address, int test);
+int incrementTested();
+int incrementSkipped();
+int incrementFound();
+int setTested(int val);
+int isTested(int test);
 int testPerfect(int n);
-int getProcessIndex(shm_buf * address);
+int getProcessIndex();
 void die(int signum);
+int sendPerfect(int val);
 int main(int argc, char *argv[]){
 	if (argc != 2){
 		printf("%s",useage);
@@ -87,14 +88,13 @@ int main(int argc, char *argv[]){
 
 	if ((msqid = msgget(key, flags | 0666)) == -1){
 		printf("Error opening message queue in Compute\n");
-		exit(1);
+		die(SIGINT);
 	}
 
 	//send pid to manager
 	msgbuf message;
 	message.mdata = pid;
 	message.mtype = 1;	//type 1 means its a pid
-	printf("prepping to send message: %d\n", message.mdata);
 	if ((msgsnd(msqid, &message, sizeof(message.mdata), 0)) < 0){
 		printf("Error sending message. Errno: %d\n", errno);
 	}else{
@@ -104,33 +104,44 @@ int main(int argc, char *argv[]){
 	//Get Process index from manager
 	if ((msgrcv(msqid, &message, sizeof(message.mdata), pid, 0)) == -1){
 		printf("Error getting process index from manager. Errno: %d\n", errno);
-		exit(1);
+		die(SIGINT);
 	}
 	processIndex = message.mdata;
-	printf("got process index: %d\n", processIndex);
 
-	//Process numbers beginning with starting point
+
+	/* DO COMPUTING */
+	//------------------------------------------------------------------------
+	printf("compute goint to start computing\n");
 	int startNumber = atoi(argv[1]);
+	if (startNumber < 0){
+		startNumber = 0;
+	}
 	int curr = startNumber;
 	do{
-		if (!isTested(shmaddr, curr)){ //check if number is in bitmap
-			setTested(shmaddr, curr);
-			incrementTested(shmaddr);
+		if (!isTested(curr)){ //check if number is in bitmap
+			setTested(curr);
+			incrementTested();
 			int isPerfect = testPerfect(curr); 	//process number
 			if (isPerfect){
-				incrementFound(shmaddr);
+				printf("got perfect %d, score: %d\n", curr, isPerfect);
+				incrementFound();
+				sendPerfect(curr);
 			}
 		}else{
-			incrementSkipped(shmaddr);
+			incrementSkipped();
 		}
-		curr = startNumber;
-	}while(curr != startNumber);
+		curr++;
+		if (curr > pow(2,25)){
+			curr = 0;
+		}
+
+	}while(1);
 
 }
 
-int getProcessIndex(shm_buf * address){
+int getProcessIndex(){
 	for (int i = 0; i < 20; ++i){
-		process * proc = &(address->processes[i]);
+		process * proc = &(shmaddr->processes[i]);
 		if (proc){
 			if (proc->pid == pid){
 				return i;
@@ -139,27 +150,29 @@ int getProcessIndex(shm_buf * address){
 	}
 	return -1;
 }
-int incrementTested(shm_buf * address){
-	address->process[processIndex].tested++;
+int incrementTested(){
+	return shmaddr->processes[processIndex].tested++;
 }
-int incrementSkipped(shm_buf * address){
-	address->process[processIndex].skipped++;
+int incrementSkipped(){
+	return shmaddr->processes[processIndex].skipped++;
 }
-int incrementFound(shm_buf * address){
-	address->process[processIndex].found++;
+int incrementFound(){
+	return shmaddr->processes[processIndex].found++;
 }
-int setTested(shm_buf * address, int val){
+int setTested( int val){
 	int index = val / (sizeof(int)*8);
 	int offset = val % (sizeof(int)*8);
-	address->bitmap[index] = address->bitmap[index] | (1 << offset);
+	shmaddr->bitmap[index] = shmaddr->bitmap[index] | (1 << offset);
 	return 1;
 }
-int isTested(shm_buf * address, int test){
+int isTested(int val){
 	int index = val / (sizeof(int)*8);
 	int offset = val % (sizeof(int)*8);
-	return (address->bitmap[index] | (1 << offset));
+	int ans = (shmaddr->bitmap[index] & (1 << offset));
+	return (shmaddr->bitmap[index] & (1 << offset));
 }
 int testPerfect(int n){
+	if (n<6) return 0;
 	int sum = 0;
 	for (int i = 1; i < n; ++i){	//test all numbers 1 to n-1
 		if (((n%i)==0)){	//this is a divisor
@@ -169,21 +182,31 @@ int testPerfect(int n){
 	if (sum == n){
 		return n;
 	}else{
-		return -1;
+		return 0;
+	}
+}
+int sendPerfect(int val){
+	//send message to manager that a new perfect has been found
+	msgbuf message;
+	message.mdata = val;
+	message.mtype = 2;	//type 2 means its a perfect
+	if ((msgsnd(msqid, &message, sizeof(message.mdata), 0)) < 0){
+		printf("Error sending message. Errno: %d\n", errno);
+	}else{
+		printf("finished sending message: %d of type %lu\n", message.mdata, message.mtype);
 	}
 }
 void die(int signum){
 	printf("compute received signal %d\n", signum);
-	sleep(3);
 	//delete process table entry
-	shmaddr->processes[processIndex].pid = 0;
-	shmaddr->processes[processIndex].tested = 0;
-	shmaddr->processes[processIndex].skipped = 0;
-	shmaddr->processes[processIndex].found = 0;
-
-	//detach shared memory
-	shmdt(shmaddr);
-
+	if (shmaddr){
+		shmaddr->processes[processIndex].pid = 0;
+		shmaddr->processes[processIndex].tested = 0;
+		shmaddr->processes[processIndex].skipped = 0;
+		shmaddr->processes[processIndex].found = 0;
+		//detach shared memory
+		shmdt(shmaddr);
+	}
 	exit(0);
 }
 

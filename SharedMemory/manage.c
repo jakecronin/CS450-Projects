@@ -45,6 +45,7 @@ int msqid;				//message queue id
 int shmid;		//shared memory id
 
 int addPidToTable(int pid);
+int addPerfToTable(int val);
 void die(int signum);
 
 int main(int argc, char *argv[]){
@@ -117,7 +118,20 @@ int main(int argc, char *argv[]){
 				}
 				break;
 			case 2:
-				printf("got a new perfect\n");
+				printf("manage got a new perfect\n");
+				int isNew=1;	//flag for check to ensure this perfect is unique
+				for (int i = 0; i < 20; ++i){
+					if (shmaddr->perfs[i]==message.mdata){
+						isNew=0;
+					}
+				}
+				if (isNew){
+					if (!addPerfToTable(message.mdata)){
+						printf("Error adding perf to table. No spots left\n");
+					}
+				}
+				int i = 0;
+				
 				break;
 			default:
 				printf("Manage read weird message of type: %d with data %lu\n", message.mdata,message.mtype);
@@ -135,6 +149,19 @@ int main(int argc, char *argv[]){
 	return 0;
 }
 
+int addPerfToTable(int val){
+	int i = 0;
+	while(i < 20){
+		if (shmaddr->perfs[i] == 0){
+			shmaddr->perfs[i] = val;
+			return 1;
+		}
+		i++;
+	}
+	return -1;
+}
+
+
 int addPidToTable(int pid){	//return -1 if process table is full, terminates compute process
 	//loop through shmadder
 
@@ -149,7 +176,7 @@ int addPidToTable(int pid){	//return -1 if process table is full, terminates com
 			proc->found = 0;
 			//insert into pid table
 			printf("adding pid %d to table\n", pid);
-			return pid;
+			return i;
 		}else{
 			printf("not empty at %d\n", i);
 		}
@@ -162,7 +189,6 @@ void die(int signum){
 
 
 	printf("Manage received signal %d\n", signum);
-	sleep(3);
 	/*interrupt compute programs*/
 	int comppid;
 	for (int i = 0; i < 20; ++i){
