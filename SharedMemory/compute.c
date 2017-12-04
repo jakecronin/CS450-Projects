@@ -33,8 +33,13 @@ typedef struct _shm_buf{
 	int bitmap[1048576];	//holds 2^25 bits (2^25 / CHAR_BIT / sizeof(int)
 	int perfs[20];
 	process processes[20];
+	int managepid;
 }shm_buf;
 
+int shmid;		//shared memory id
+shm_buf * shmaddr;	//address of shared memory
+int processIndex;	//index of this process in shared memory process array
+int msqid;
 int pid;
 
 int incrementTested(shm_buf * address);
@@ -44,25 +49,26 @@ int setTested(shm_buf * address, int val);
 int isTested(shm_buf * address, int test);
 int testPerfect(int n);
 int getProcessIndex(shm_buf * address);
-
+void die(int signum);
 int main(int argc, char *argv[]){
 	if (argc != 2){
 		printf("%s",useage);
 		return 0;
 	}
 
+	//Handle signals -> delete entry in process table, detach shared mem, die
+	signal(SIGINT, die);
+	signal(SIGHUP, die);
+	signal(SIGQUIT, die);
+
 	/* GET AND ATTACH SHARED MEMORY*/
 	//---------------------------------------------------------------
 	int key = 60302;
 	pid = getpid();
-	int processIndex = 0;	//index of this process in shared memory process array
 	//create or find + link shared 
-	shm_buf * shmaddr;	//address of shared memory
-	int shmid;		//shared memory id
 	long shmsize = sizeof(shm_buf);	//size of shared memory
-	shmsize = 400;
 	if ((shmid = shmget(key, shmsize, IPC_CREAT | 0666)) < 0){	//find or create shared memory
-		printf("Error getting shared memory\n");
+		printf("Error getting shared memory, errno %d\n", errno);
 		exit(1);
 	}
 
@@ -77,8 +83,6 @@ int main(int argc, char *argv[]){
 	//open/create message queue
 	key_t msgkey;
 	int flags = IPC_CREAT;
-	int msqid;
-
 	msgkey = ftok(".", 'j');
 
 	if ((msqid = msgget(key, flags | 0666)) == -1){
@@ -122,11 +126,6 @@ int main(int argc, char *argv[]){
 		curr = startNumber;
 	}while(curr != startNumber);
 
-	//detach shared memory
-	shmdt(shmaddr);
-
-	//close  message queue
-	msgctl(msqid, IPC_RMID, NULL);
 }
 
 int getProcessIndex(shm_buf * address){
@@ -141,21 +140,25 @@ int getProcessIndex(shm_buf * address){
 	return -1;
 }
 int incrementTested(shm_buf * address){
-	return 0;
+	address->process[processIndex].tested++;
 }
 int incrementSkipped(shm_buf * address){
-	return 0;
+	address->process[processIndex].skipped++;
 }
 int incrementFound(shm_buf * address){
-	return 0;
+	address->process[processIndex].found++;
 }
 int setTested(shm_buf * address, int val){
-	return 0;
+	int index = val / (sizeof(int)*8);
+	int offset = val % (sizeof(int)*8);
+	address->bitmap[index] = address->bitmap[index] | (1 << offset);
+	return 1;
 }
 int isTested(shm_buf * address, int test){
-	return 0;
+	int index = val / (sizeof(int)*8);
+	int offset = val % (sizeof(int)*8);
+	return (address->bitmap[index] | (1 << offset));
 }
-
 int testPerfect(int n){
 	int sum = 0;
 	for (int i = 1; i < n; ++i){	//test all numbers 1 to n-1
@@ -169,3 +172,19 @@ int testPerfect(int n){
 		return -1;
 	}
 }
+void die(int signum){
+	printf("compute received signal %d\n", signum);
+	sleep(3);
+	//delete process table entry
+	shmaddr->processes[processIndex].pid = 0;
+	shmaddr->processes[processIndex].tested = 0;
+	shmaddr->processes[processIndex].skipped = 0;
+	shmaddr->processes[processIndex].found = 0;
+
+	//detach shared memory
+	shmdt(shmaddr);
+
+	exit(0);
+}
+
+
