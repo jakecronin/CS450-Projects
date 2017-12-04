@@ -135,7 +135,7 @@ int main(int argc, char *argv[]){
 			curr = 0;
 		}
 
-	}while(1);
+	}while(curr != startNumber);
 
 }
 
