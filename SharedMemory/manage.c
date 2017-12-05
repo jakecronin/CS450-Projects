@@ -98,16 +98,14 @@ int main(int argc, char *argv[]){
 
 	//Recieve messages
 	msgbuf message;
+	int isNew; //flag for check to ensure this perfect is unique. Used only for signal 2
 	while(1){
-		printf("Manage waiting for messages\n");
 		if ((msgrcv(msqid, &message, sizeof(message.mdata), -2, 0)) < 0){	//receive only type 1 and type 2 messages (pids and perfs)
 			printf("Error recieving message. Errno: %d\n", errno);
 			break;
 		}
-		printf("Processing message: %d of type %lu\n", message.mdata, message.mtype);
 		switch(message.mtype){
 			case 1:
-				printf("manage got message of type 1. going to process\n");
 				message.mtype = message.mdata;	//remember compute pid in mtype
 				if ((message.mdata = addPidToTable(message.mdata)) == -1){
 					printf("compute process %d exceeds process table. Killed by manage\n", message.mdata);
@@ -118,8 +116,7 @@ int main(int argc, char *argv[]){
 				}
 				break;
 			case 2:
-				printf("manage got a new perfect\n");
-				int isNew=1;	//flag for check to ensure this perfect is unique
+				isNew = 1;
 				for (int i = 0; i < 20; ++i){
 					if (shmaddr->perfs[i]==message.mdata){
 						isNew=0;
@@ -127,7 +124,7 @@ int main(int argc, char *argv[]){
 				}
 				if (isNew){
 					if (!addPerfToTable(message.mdata)){
-						printf("Error adding perf to table. No spots left\n");
+						printf("Error adding perf to table. Perf table is full.\n");
 					}
 				}
 				int i = 0;
@@ -169,16 +166,12 @@ int addPidToTable(int pid){	//return -1 if process table is full, terminates com
 	for (int i = 0; i < 20; ++i){
 		if (shmaddr->processes[i].pid == 0){
 			proc = &(shmaddr->processes[i]);
-			printf("found empty spot %d\n", i);
 			proc->pid = pid;
 			proc->tested = 0;
 			proc->skipped = 0;
 			proc->found = 0;
 			//insert into pid table
-			printf("adding pid %d to table\n", pid);
 			return i;
-		}else{
-			printf("not empty at %d\n", i);
 		}
 	}
 	return -1;
@@ -188,7 +181,7 @@ void die(int signum){
 	//block incoming signals, iterrupt all compute programs, sleep, cleanup, die
 
 
-	printf("Manage received signal %d\n", signum);
+	printf("Manage received signal %d. Cleaning and quitting...\n", signum);
 	/*interrupt compute programs*/
 	int comppid;
 	for (int i = 0; i < 20; ++i){

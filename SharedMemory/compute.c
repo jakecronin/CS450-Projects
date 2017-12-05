@@ -12,6 +12,8 @@ THIS CODE IS MY OWN WORK AND I WROTE IT WITHOUT CONSULTING A TUTOR
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <errno.h>
+#include <signal.h>
+#include <string.h>
 
 int testPerfect(int n);	//returns number if perfect, -1 if not perfect
 char *useage = "Usage: ./compute integer\n";
@@ -97,8 +99,6 @@ int main(int argc, char *argv[]){
 	message.mtype = 1;	//type 1 means its a pid
 	if ((msgsnd(msqid, &message, sizeof(message.mdata), 0)) < 0){
 		printf("Error sending message. Errno: %d\n", errno);
-	}else{
-		printf("finished sending message: %d of type %lu\n", message.mdata, message.mtype);
 	}
 		
 	//Get Process index from manager
@@ -111,7 +111,7 @@ int main(int argc, char *argv[]){
 
 	/* DO COMPUTING */
 	//------------------------------------------------------------------------
-	printf("compute goint to start computing\n");
+	printf("Compute registered. Beginning computing\n");
 	int startNumber = atoi(argv[1]);
 	if (startNumber < 0){
 		startNumber = 0;
@@ -123,7 +123,7 @@ int main(int argc, char *argv[]){
 			incrementTested();
 			int isPerfect = testPerfect(curr); 	//process number
 			if (isPerfect){
-				printf("got perfect %d, score: %d\n", curr, isPerfect);
+				printf("got perfect %d\n", curr);
 				incrementFound();
 				sendPerfect(curr);
 			}
@@ -192,12 +192,12 @@ int sendPerfect(int val){
 	message.mtype = 2;	//type 2 means its a perfect
 	if ((msgsnd(msqid, &message, sizeof(message.mdata), 0)) < 0){
 		printf("Error sending message. Errno: %d\n", errno);
-	}else{
-		printf("finished sending message: %d of type %lu\n", message.mdata, message.mtype);
+		return 0;
 	}
+	return 1;
 }
 void die(int signum){
-	printf("compute received signal %d\n", signum);
+	printf("compute received signal %d. Going to Die.\n", signum);
 	//delete process table entry
 	if (shmaddr){
 		shmaddr->processes[processIndex].pid = 0;
