@@ -193,10 +193,10 @@ void appendFiles(int argc, char *argv[]){
 			printf("Error, did not write entire file. %d", errno);
 		}
 
-		if (fileStats.st_size % 2){
-			printf("writing odd char\n");
-			write(archDesc, "\n", 1);	//buffer to keep data 2 byte aligned
-		}
+		// if (fileStats.st_size % 2){
+		// 	printf("writing odd char\n");
+		// 	write(archDesc, '\n', 1);	//buffer to keep data 2 byte aligned
+		// }
 		close(fd);
 	}
 	close(archDesc);
