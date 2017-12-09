@@ -180,6 +180,9 @@ int addPidToTable(int pid){	//return -1 if process table is full, terminates com
 void die(int signum){
 	//block incoming signals, iterrupt all compute programs, sleep, cleanup, die
 
+	signal(SIGINT, SIG_IGN);
+	signal(SIGQUIT, SIG_IGN);
+	signal(SIGHUP, SIG_IGN);
 
 	printf("Manage received signal %d. Cleaning and quitting...\n", signum);
 	/*interrupt compute programs*/

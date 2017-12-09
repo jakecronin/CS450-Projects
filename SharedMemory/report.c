@@ -62,8 +62,8 @@ int main(int argc, char *argv[]){
 	//------------------------------------------------------------------------
 	int key = 60302;
 	int shmsize = sizeof(shm_buf);	//size of shared memory
-	if ((shmid = shmget(key, shmsize, IPC_CREAT | 0666)) < 0){	//find or create shared memory
-		printf("Error getting shared memory errno: %d\n", errno);
+	if ((shmid = shmget(key, shmsize, 0666)) < 0){	//find or create shared memory
+		printf("Shared memory doesn't exist. Nothing to report\n");
 		exit(1);
 	}
 	if ((shmaddr = shmat(shmid, NULL, 0)) == (int *) -1){	//attach shared memory at next open address for reading and writing

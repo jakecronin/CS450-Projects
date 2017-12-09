@@ -100,8 +100,9 @@ int main(int argc, char *argv[]){
 	if ((msgsnd(msqid, &message, sizeof(message.mdata), 0)) < 0){
 		printf("Error sending message. Errno: %d\n", errno);
 	}
-		
+
 	//Get Process index from manager
+	processIndex = -1;
 	if ((msgrcv(msqid, &message, sizeof(message.mdata), pid, 0)) == -1){
 		printf("Error getting process index from manager. Errno: %d\n", errno);
 		die(SIGINT);
@@ -207,6 +208,12 @@ void die(int signum){
 		//detach shared memory
 		shmdt(shmaddr);
 	}
+
+	if (processIndex == -1){	//manager not around, destroy manage queue and shared memory
+		msgctl(msqid, IPC_RMID, NULL); 	//Close message queue
+		shmctl(shmid, IPC_RMID, NULL);	//unlink shared memory so it is destroyed
+	}
+
 	exit(0);
 }
 
