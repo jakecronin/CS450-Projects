@@ -18,7 +18,7 @@ int main(int argc, char const *argv[]){
 
 	int fifofd;
 	printf("going to open reader\n");
-	while((fifofd = open("/tmp/jakefifo", O_RONLY)) == -1){
+	while((fifofd = open("/tmp/jakefifo", O_RDONLY | O_NONBLOCK)) == -1){
 		if (errno == ENXIO){
 			printf("reader can't open\n"); sleep(5);}
 		else{perror("opening fifo"); exit(2);}
@@ -26,13 +26,16 @@ int main(int argc, char const *argv[]){
 	printf("reader open\n");
 
 	while(1){
-		char * s;
-		gets(s);
-		printf("putting s into fifo\n");
-		if (strcmp(s, "q")){break;}
-		while(write(fifofd, s, strlen(s)) == -1){
-			printf("waiting to write\n");
+		char c;
+		int r;
+		while((r = read(fifofd, &c, 1)) < 1){
+			printf("waiting to write with r: %d\n", r);
+			if (errno){
+				perror("read");
+				exit(1);
+			}
 		}
+		putc(c, stdout);
 	}
 	close(fifofd);
 	return 0;

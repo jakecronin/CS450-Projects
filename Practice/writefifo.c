@@ -12,6 +12,8 @@ void hi(int signum);
 int main(int argc, char const *argv[]){
 
 	signal(SIGQUIT, hi);
+	signal(SIGHUP, hi);
+	signal(SIGPIPE, hi);
 
 	printf("beginning writer\n");
 	if (mkfifo("/tmp/jakefifo", 0666) == -1 && errno != EEXIST){
@@ -19,18 +21,18 @@ int main(int argc, char const *argv[]){
 
 	int fifofd;
 	printf("going to open writer\n");
-	while((fifofd = open("/tmp/jakefifo", O_WRONLY | O_NONBLOCK)) == -1){
+	while((fifofd = open("/tmp/jakefifo", O_WRONLY)) == -1){
 		if (errno == ENXIO){
 			printf("writer can't open\n"); sleep(5);}
 		else{perror("opening fifo"); exit(2);}
 	}
+	printf("writer open\n");
 
 	while(1){
-		char * s;
-		gets(s);
-		printf("putting s into fifo\n");
-		if (strcmp(s, "q")){break;}
-		while(write(fifofd, s, strlen(s)) == -1){
+		char c;
+		c = getc(stdin);
+		if (c == 'q'){break;}
+		while(write(fifofd, &c, 1) == -1){
 			printf("waiting to write\n");
 		}
 	}
